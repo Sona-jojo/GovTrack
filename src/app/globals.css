@@ -1,0 +1,487 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f4f6;
+  --foreground: #0f172a;
+  --panel: #ffffff;
+  --accent: #3b82f6;
+  --accent-soft: #dbeafe;
+  --accent2: #1d4ed8;
+  --accent3: #374151;
+  --accent4: #6b7280;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-space-grotesk);
+}
+
+html {
+  width: 100%;
+  margin: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
+}
+
+body {
+  width: 100%;
+  margin: 0;
+  padding-left: calc(100vw - 100%);
+  padding-right: 0;
+  overflow-x: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-space-grotesk), "Segoe UI", sans-serif;
+}
+
+* {
+  min-width: 0;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+.ui-break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+::selection {
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+
+/* ── Background ──────────────────────────────────────── */
+.ui-bg {
+  background:
+    radial-gradient(circle at 8% 10%, rgba(59, 130, 246, 0.15), transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(30, 64, 175, 0.12), transparent 36%),
+    radial-gradient(circle at 50% 92%, rgba(75, 85, 99, 0.12), transparent 40%),
+    linear-gradient(160deg, #f3f4f6 0%, #eff6ff 45%, #f9fafb 100%);
+}
+
+/* ── Glassmorphism card ───────────────────────────────── */
+.ui-glass {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 24px 56px -28px rgba(30, 64, 175, 0.25),
+    0 8px 20px -12px rgba(71, 85, 105, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px);
+}
+
+.ui-surface {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(140deg, rgba(255,255,255,0.97), rgba(239,246,255,0.82));
+  box-shadow: 0 10px 28px -16px rgba(30, 64, 175, 0.2);
+}
+
+/* ── Primary button — violet → blue → cyan ────────────── */
+.ui-button-primary {
+  background: linear-gradient(92deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%);
+  box-shadow: 0 14px 32px -16px rgba(30, 64, 175, 0.45);
+}
+
+.ui-button-primary:hover {
+  filter: brightness(1.08) saturate(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -14px rgba(30, 64, 175, 0.55);
+}
+
+/* ── Gradient text ────────────────────────────────────── */
+.ui-gradient-text {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 35%, #3b82f6 65%, #1f2937 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ui-gradient-text-warm {
+  background: linear-gradient(135deg, #f43f5e 0%, #f97316 50%, #eab308 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Float animation ──────────────────────────────────── */
+.ui-float {
+  animation: ui-float 3.8s ease-in-out infinite;
+}
+
+@keyframes ui-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-7px); }
+}
+
+/* ── Blob animations ──────────────────────────────────── */
+.ui-blob {
+  animation: blob-drift 9s ease-in-out infinite;
+  border-radius: 60% 40% 55% 45% / 50% 55% 45% 50%;
+}
+
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0,   0)   scale(1);    border-radius: 60% 40% 55% 45% / 50% 55% 45% 50%; }
+  33%       { transform: translate(18px,-18px) scale(1.06); border-radius: 50% 50% 40% 60% / 45% 55% 50% 50%; }
+  66%       { transform: translate(-14px,10px) scale(0.95); border-radius: 55% 45% 60% 40% / 55% 45% 50% 50%; }
+}
+
+/* ── Shimmer ──────────────────────────────────────────── */
+.ui-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.ui-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+  animation: shimmer 2.2s infinite;
+}
+@keyframes shimmer {
+  0%   { transform: translateX(-120%) skewX(-12deg); }
+  100% { transform: translateX(220%)  skewX(-12deg); }
+}
+
+/* ── Pulse glow ───────────────────────────────────────── */
+.ui-pulse-glow {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 14px rgba(37, 99, 235, 0.35); }
+  50%       { box-shadow: 0 0 32px rgba(37, 99, 235, 0.55), 0 0 56px rgba(31, 41, 55, 0.2); }
+}
+
+/* ── Standard Pulse Animation ───────────────────────────*/
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Fade in ──────────────────────────────────────────── */
+.animate-fadeIn {
+  animation: fadeIn 0.30s ease-out both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Colorful top-bar stripe ──────────────────────────── */
+.ui-rainbow-bar {
+  background: linear-gradient(90deg,
+    #3b82f6 0%,
+    #2563eb 30%,
+    #1d4ed8 60%,
+    #374151 100%
+  );
+}
+
+/* ── Card glow on hover ───────────────────────────────── */
+.ui-card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.ui-card-hover:hover {
+  transform: translateY(-4px) scale(1.015);
+  box-shadow: 0 20px 44px -20px rgba(30, 64, 175, 0.3);
+}
+
+/* ── Location UX Theme ───────────────────────────────── */
+.ui-location-shell {
+  background:
+    radial-gradient(circle at 0% 10%, rgba(56, 189, 248, 0.28), transparent 38%),
+    radial-gradient(circle at 98% 0%, rgba(99, 102, 241, 0.2), transparent 44%),
+    radial-gradient(circle at 50% 100%, rgba(236, 72, 153, 0.18), transparent 48%),
+    linear-gradient(140deg, rgba(236, 254, 255, 0.9) 0%, rgba(239, 246, 255, 0.88) 45%, rgba(250, 245, 255, 0.9) 100%);
+}
+
+.ui-location-card {
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    0 24px 56px -34px rgba(14, 116, 144, 0.48),
+    0 8px 18px -12px rgba(59, 130, 246, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(14px);
+}
+
+.ui-location-input {
+  box-shadow: 0 8px 20px -15px rgba(14, 116, 144, 0.42);
+}
+
+.ui-location-input:focus {
+  border-color: #06b6d4;
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 238, 0.22),
+    0 14px 30px -18px rgba(2, 132, 199, 0.6);
+}
+
+.ui-location-button {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(95deg, #0ea5e9 0%, #2563eb 55%, #f97316 100%);
+  box-shadow: 0 14px 30px -18px rgba(2, 132, 199, 0.62);
+}
+
+.ui-location-button:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 18px 34px -18px rgba(2, 132, 199, 0.68);
+}
+
+.ui-location-button::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  transition: width 0.32s ease, height 0.32s ease, opacity 0.32s ease;
+  opacity: 0;
+}
+
+.ui-location-button:active::after {
+  width: 220px;
+  height: 220px;
+  opacity: 1;
+}
+
+.ui-location-button:disabled {
+  transform: none;
+  background: #cbd5e1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.ui-location-button:disabled::after {
+  display: none;
+}
+
+.ui-location-autofill {
+  animation: location-pop 0.36s ease-out;
+}
+
+@keyframes location-pop {
+  0% { transform: scale(0.985); filter: saturate(1.08); }
+  60% { transform: scale(1.01); }
+  100% { transform: scale(1); filter: saturate(1); }
+}
+
+/* ── Login page special background ────────────────────── */
+.ui-login-bg {
+  background:
+    radial-gradient(circle at 8% 8%, rgba(59, 130, 246, 0.25), transparent 42%),
+    radial-gradient(circle at 92% 12%, rgba(139, 92, 246, 0.22), transparent 48%),
+    radial-gradient(circle at 50% 95%, rgba(34, 197, 94, 0.18), transparent 50%),
+    linear-gradient(160deg, #eff6ff 0%, #f9fafb 45%, #ffffff 100%);
+}
+
+.ui-noise-overlay {
+  background-image: 
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' seed='1' /%3E%3C/filter%3E%3Crect width='400' height='400' fill='%23ffffff' filter='url(%23noiseFilter)' opacity='0.018' /%3E%3C/svg%3E");
+}
+
+/* ── Modern button style ─────────────────────────────────  */
+.ui-button-modern {
+  background: linear-gradient(92deg, #3b82f6 0%, #2563eb 45%, #1d4ed8 100%);
+  box-shadow: 0 14px 32px -16px rgba(30, 64, 175, 0.45);
+}
+
+.ui-button-modern:hover {
+  filter: brightness(1.08) saturate(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -14px rgba(30, 64, 175, 0.55);
+}
+
+/* ── Ghost button ───────────────────────────────────────── */
+.ui-button-ghost {
+  transition: all 0.3s ease;
+}
+
+.ui-button-ghost:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -12px rgba(30, 64, 175, 0.25);
+}
+
+/* ── Rise-in animation for login card ────────────────────  */
+.animate-rise-in {
+  animation: rise-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Fade in animation ──────────────────────────────────── */
+.animate-fadeIn {
+  animation: fadeIn 0.30s ease-out both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.ui-journey-path {
+  border-top: 2px dashed rgba(59, 130, 246, 0.45);
+  filter: drop-shadow(0 2px 2px rgba(59, 130, 246, 0.15));
+}
+
+.ui-journey-ring {
+  position: relative;
+}
+
+.ui-journey-ring::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* ── Dashboard utilities ────────────────────────────────── */
+
+/* Hover lift effect for cards */
+.ui-hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.ui-hover-lift:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 16px 40px -12px rgba(30, 64, 175, 0.3);
+}
+
+/* Sticky table header */
+.ui-table-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Dashboard stat card */
+.ui-dashboard-stat-card {
+  border-radius: 0.875rem;
+  border-width: 2px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+.ui-dashboard-stat-card:hover {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 24px 48px -16px rgba(30, 64, 175, 0.35);
+}
+
+/* Dashboard notification card */
+.ui-dashboard-notification {
+  border-width: 2px;
+  border-radius: 0.875rem;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  background: #ffffff;
+}
+
+.ui-dashboard-notification:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px -8px rgba(30, 64, 175, 0.25);
+}
+
+/* Status and priority badges */
+.ui-badge-status {
+  border-radius: 999px;
+  border-width: 1px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ui-badge-priority {
+  border-radius: 999px;
+  border-width: 1px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Segmented control (toggle group) */
+.ui-segmented-control {
+  display: flex;
+  gap: 0.25rem;
+  border-radius: 0.875rem;
+  border-width: 2px;
+  padding: 0.25rem;
+  background-color: rgba(248, 247, 245, 0.8);
+}
+
+.ui-segmented-control button {
+  transition: all 0.3s ease;
+  border-radius: 0.625rem;
+  padding: 0.375rem 0.875rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.ui-segmented-control button.active {
+  background: linear-gradient(92deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 16px -8px rgba(30, 64, 175, 0.4);
+}
+
+/* Zebra striping helper */
+.ui-table-row-even {
+  background-color: rgba(248, 248, 250, 0.5);
+}
+
+.ui-table-row-odd {
+  background-color: #ffffff;
+}
+
+/* Table row hover */
+.ui-table-row {
+  transition: background-color 0.2s ease;
+}
+
+.ui-table-row:hover {
+  background-color: rgba(59, 130, 246, 0.08);
+}
+
+.ui-badge-pulse {
+  animation: badge-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.12);
+  }
+}
