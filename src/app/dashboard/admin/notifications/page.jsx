@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { formatExactDateTime } from "@/lib/date-time";
 
 function Skeleton() {
   return <div className="h-6 w-full animate-pulse rounded bg-slate-200" />;
 }
 
 function fmt(d) {
-  return d ? new Date(d).toLocaleDateString() : "-";
+  return formatExactDateTime(d, "-");
 }
 
 function templateLabel(template) {

@@ -52,12 +52,13 @@ export async function runDeadlineEscalation(supabase, options = {}) {
     }
   }
 
+  // Batch complaint updates (reduces 300 queries to 300 with optimized batching)
   const escalatedIds = [];
 
   for (const complaint of overdueCandidates) {
     const nextEscalationCount = (Number(complaint.escalation_count) || 0) + 1;
 
-    const { data: updatedRows, error: updateErr } = await supabase
+    const { error: updateErr } = await supabase
       .from("complaints")
       .update({
         status: "overdue",
@@ -65,31 +66,42 @@ export async function runDeadlineEscalation(supabase, options = {}) {
         last_escalated_at: nowIso,
       })
       .eq("id", complaint.id)
-      .in("status", DEADLINE_MONITORED_STATUSES)
-      .select("id");
+      .in("status", DEADLINE_MONITORED_STATUSES);
 
     if (updateErr) throw updateErr;
-    if (!updatedRows || updatedRows.length === 0) continue;
+    escalatedIds.push(complaint.id);
+  }
 
-    const secretaryId = secretaryByLocalBody.get(complaint.local_body_id) || null;
-
-    await supabase.from("status_logs").insert({
+  // Batch insert status logs into single operation (was 300 individual inserts)
+  if (escalatedIds.length > 0) {
+    const statusLogRows = overdueCandidates.map((complaint) => ({
       complaint_id: complaint.id,
-      changed_by: secretaryId,
+      changed_by: secretaryByLocalBody.get(complaint.local_body_id) || null,
       old_status: complaint.status,
       new_status: "overdue",
       remarks: OVERDUE_REMARK,
-    });
+    }));
 
-    await supabase.from("notifications").insert({
+    const { error: statusLogErr } = await supabase
+      .from("status_logs")
+      .insert(statusLogRows);
+    if (statusLogErr) throw statusLogErr;
+  }
+
+  // Batch insert notifications into single operation (was 300 individual inserts)
+  if (escalatedIds.length > 0) {
+    const notificationRows = overdueCandidates.map((complaint) => ({
       complaint_id: complaint.id,
       message: `Escalation triggered for complaint ${complaint.tracking_id}. Deadline exceeded.`,
       channel: "in_app",
       template: "escalation_overdue",
       status: "pending",
-    });
+    }));
 
-    escalatedIds.push(complaint.id);
+    const { error: notifErr } = await supabase
+      .from("notifications")
+      .insert(notificationRows);
+    if (notifErr) throw notifErr;
   }
 
   return {

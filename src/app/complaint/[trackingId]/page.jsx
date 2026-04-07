@@ -17,6 +17,7 @@ import { BackArrowButton } from "@/components/ui/back-arrow-button";
 import { useAuth } from "@/components/auth/auth-provider";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatStaffDisplayLabel } from "@/lib/api/staff-management";
+import { formatExactDateTime } from "@/lib/date-time";
 
 function ToastStack({ toasts, onDismiss }) {
   return (
@@ -42,16 +43,7 @@ function ToastStack({ toasts, onDismiss }) {
 }
 
 function fmt(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${day}-${month}-${year}, ${hour12}:${minutes} ${ampm}`;
+  return formatExactDateTime(value, "-");
 }
 
 function getTimelineTone(status) {
@@ -68,6 +60,35 @@ function getTimelineTone(status) {
     return { dot: "bg-rose-500", title: "text-rose-700" };
   }
   return { dot: "bg-teal-500", title: "text-teal-700" };
+}
+
+function getTimelineLabel(log, lang) {
+  const newStatus = String(log?.new_status || "").toLowerCase();
+  const oldStatus = String(log?.old_status || "").toLowerCase();
+  const remarks = String(log?.remarks || "").toLowerCase();
+
+  const isSameStatus = Boolean(newStatus) && newStatus === oldStatus;
+  const isAssignmentEvent = remarks.includes("reassign") || remarks.includes("assign");
+
+  if (isSameStatus && isAssignmentEvent) {
+    return pick(lang, "Reassigned", "വീണ്ടും നിയോഗിച്ചു");
+  }
+
+  return STATUS_LABELS[log?.new_status] || log?.new_status || "-";
+}
+
+function getRatingLabel(rating) {
+  if (rating <= 1) return "Poor";
+  if (rating === 2) return "Fair";
+  if (rating === 3) return "Good";
+  if (rating === 4) return "Very Good";
+  return "Excellent";
+}
+
+function getFeedbackTagTone(rating) {
+  if (rating >= 4) return "border-emerald-300 bg-emerald-50 text-emerald-800";
+  if (rating <= 2) return "border-red-300 bg-red-50 text-red-800";
+  return "border-amber-300 bg-amber-50 text-amber-800";
 }
 
 export default function ComplaintDetailsPage() {
@@ -93,7 +114,10 @@ export default function ComplaintDetailsPage() {
   const [copyDone, setCopyDone] = useState(false);
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState("");
-  const [ratingSaved, setRatingSaved] = useState(false);
+  const [feedbackRecord, setFeedbackRecord] = useState(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
   const [toasts, setToasts] = useState([]);
 
   const pushToast = (type, title, message) => {
@@ -137,6 +161,10 @@ export default function ComplaintDetailsPage() {
       ? pick(lang, "Shared citizen reports", "പല പൗര റിപ്പോർട്ടുകൾ")
       : pick(lang, "Private citizen report", "സ്വകാര്യ പൗര റിപ്പോർട്ട്"));
   const showCitizenRating = isResolved && isPublicTrackingView;
+  const canViewOfficialFeedback =
+    isResolved &&
+    (profile?.role === "admin" || profile?.role === "secretary" || isAssigneeForComplaint);
+  const reportedAt = record?.latest_reported_at || record?.created_at;
 
   const nextStatusOptions = useMemo(() => {
     // Show all statuses instead of filtered transitions
@@ -154,7 +182,7 @@ export default function ComplaintDetailsPage() {
         {
           id: "submitted-initial",
           new_status: record.status || "submitted",
-          changed_at: record.created_at || record.updated_at,
+          changed_at: reportedAt || record.updated_at,
           remarks: pick(
             lang,
             "Issue logged and awaiting official update.",
@@ -164,8 +192,34 @@ export default function ComplaintDetailsPage() {
         },
       ];
     }
+
+    if (!reportedAt) return logs;
+
+    const latestReportedTs = new Date(reportedAt).getTime();
+    const latestLogTs = logs.reduce((max, item) => {
+      const ts = new Date(item?.changed_at || item?.created_at || 0).getTime();
+      return Number.isFinite(ts) ? Math.max(max, ts) : max;
+    }, 0);
+
+    if (Number.isFinite(latestReportedTs) && latestReportedTs > latestLogTs + 1000) {
+      return [
+        ...logs,
+        {
+          id: "latest-citizen-report",
+          new_status: record?.status || logs[logs.length - 1]?.new_status || "submitted",
+          changed_at: reportedAt,
+          remarks: pick(
+            lang,
+            "Latest citizen report received.",
+            "Latest citizen report received."
+          ),
+          profiles: null,
+        },
+      ];
+    }
+
     return logs;
-  }, [record, lang]);
+  }, [record, lang, reportedAt]);
 
   const mapLinks = useMemo(() => {
     if (!record?.latitude || !record?.longitude) return null;
@@ -266,25 +320,50 @@ export default function ComplaintDetailsPage() {
   }, [isSecretaryForComplaint, record?.local_body_id]);
 
   useEffect(() => {
-    if (!record?.tracking_id || typeof window === "undefined") return;
-    const saved = localStorage.getItem(`rating_${record.tracking_id}`);
-    if (!saved) {
+    if (!record?.id || !isResolved) {
+      setFeedbackRecord(null);
       setRating(0);
       setFeedback("");
-      setRatingSaved(false);
+      setFeedbackError("");
       return;
     }
-    try {
-      const parsed = JSON.parse(saved);
-      setRating(Number(parsed.rating) || 0);
-      setFeedback(parsed.feedback || "");
-      setRatingSaved(true);
-    } catch {
-      setRating(0);
-      setFeedback("");
-      setRatingSaved(false);
-    }
-  }, [record?.tracking_id]);
+
+    let alive = true;
+
+    const fetchFeedback = async () => {
+      setFeedbackLoading(true);
+      try {
+        const res = await fetch(`/api/feedback/get/${encodeURIComponent(record.id)}`, { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.message || "Failed to load feedback");
+        }
+
+        if (!alive) return;
+        const existing = json.data || null;
+        setFeedbackRecord(existing);
+        if (existing) {
+          setRating(Number(existing.rating) || 0);
+          setFeedback(existing.feedback || "");
+        }
+      } catch (err) {
+        if (!alive) return;
+        const message = err?.message || "Failed to load feedback";
+        // For citizen/public view we keep the form available if feedback is not loaded.
+        if (profile?.role === "admin" || profile?.role === "secretary" || isAssigneeForComplaint) {
+          setFeedbackError(message);
+        }
+      } finally {
+        if (alive) setFeedbackLoading(false);
+      }
+    };
+
+    fetchFeedback();
+
+    return () => {
+      alive = false;
+    };
+  }, [record?.id, isResolved, profile?.role, isAssigneeForComplaint]);
 
   const handleRoleUpdate = async () => {
     if (!record?.id || !canEdit) return;
@@ -338,18 +417,50 @@ export default function ComplaintDetailsPage() {
     } catch {}
   };
 
-  const saveRating = () => {
-    if (!record?.tracking_id || rating < 1 || typeof window === "undefined") return;
-    localStorage.setItem(
-      `rating_${record.tracking_id}`,
-      JSON.stringify({
-        rating,
-        feedback: feedback.trim(),
-        updatedAt: new Date().toISOString(),
-      })
-    );
-    setRatingSaved(true);
-    pushToast("success", "Rating saved", pick(lang, "Thanks! Your feedback was saved.", "നന്ദി! നിങ്ങളുടെ പ്രതികരണം സംരക്ഷിച്ചു."));
+  const saveRating = async () => {
+    if (!record?.id || rating < 1 || feedbackSubmitting || feedbackRecord) return;
+
+    setFeedbackSubmitting(true);
+    setFeedbackError("");
+    try {
+      const res = await fetch("/api/feedback/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          complaintId: record.id,
+          rating,
+          feedback: feedback.trim() || null,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || "Unable to submit feedback");
+      }
+
+      setFeedbackRecord(json.data || null);
+      pushToast("success", "Feedback submitted", pick(lang, "Thank you for your feedback!", "നിങ്ങളുടെ പ്രതികരണത്തിന് നന്ദി!"));
+    } catch (err) {
+      const message = err?.message || "Unable to submit feedback";
+      setFeedbackError(message);
+      pushToast("error", "Feedback not saved", message);
+
+      if (/already submitted/i.test(message) && record?.id) {
+        try {
+          const refreshRes = await fetch(`/api/feedback/get/${encodeURIComponent(record.id)}`, { cache: "no-store" });
+          const refreshJson = await refreshRes.json();
+          if (refreshRes.ok && refreshJson?.success && refreshJson?.data) {
+            setFeedbackRecord(refreshJson.data);
+            setRating(Number(refreshJson.data.rating) || 0);
+            setFeedback(refreshJson.data.feedback || "");
+          }
+        } catch {
+          // best effort refresh only
+        }
+      }
+    } finally {
+      setFeedbackSubmitting(false);
+    }
   };
 
   const downloadResolutionPdf = () => {
@@ -589,7 +700,7 @@ export default function ComplaintDetailsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <p className="text-xs font-semibold uppercase text-slate-600 mb-2">{pick(lang, "Reported", "റിപ്പോർട്ട്")}</p>
-                      <p className="text-sm text-slate-900 font-semibold">{fmt(record.created_at)}</p>
+                      <p className="text-sm text-slate-900 font-semibold">{fmt(reportedAt)}</p>
                     </div>
                   </div>
 
@@ -731,7 +842,7 @@ export default function ComplaintDetailsPage() {
                             {/* Timeline Card */}
                             <div className={`rounded-xl border-2 p-4 transition-all hover:shadow-lg ${tone.card}`}>
                               <h3 className={`text-xl font-bold ${tone.title}`}>
-                                {STATUS_LABELS[log.new_status] || log.new_status}
+                                {getTimelineLabel(log, lang)}
                               </h3>
                               <p className="mt-2 text-sm text-slate-600 font-medium">{fmt(log.changed_at)}</p>
                               
@@ -1132,76 +1243,122 @@ export default function ComplaintDetailsPage() {
                     </h2>
                   </div>
                   <div className="p-6 space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-700 mb-3">{pick(lang, "How satisfied are you with the resolution?", "How satisfied are you?")}</label>
-                      <div className="flex gap-3 justify-center">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => {
-                              setRating(n);
-                              setRatingSaved(false);
-                            }}
-                            className={`group relative rounded-xl px-4 py-3 transition-all transform hover:scale-110 ${
-                              rating >= n
-                                ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg"
-                                : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                            }`}
-                            aria-label={`rate-${n}`}
-                          >
-                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                            <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 whitespace-nowrap">
-                              {n === 1 && "Poor"}
-                              {n === 2 && "Fair"}
-                              {n === 3 && "Good"}
-                              {n === 4 && "Very Good"}
-                              {n === 5 && "Excellent"}
-                            </span>
-                          </button>
-                        ))}
+                    {feedbackLoading ? (
+                      <div className="h-28 animate-pulse rounded-xl border border-amber-200 bg-white/80" />
+                    ) : feedbackRecord ? (
+                      <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                        <p className="text-sm font-semibold text-emerald-900">{pick(lang, "Thank you for your feedback!", "നിങ്ങളുടെ പ്രതികരണത്തിന് നന്ദി!")}</p>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <span key={`saved-star-${n}`} className={feedbackRecord.rating >= n ? "text-amber-500" : "text-slate-300"}>⭐</span>
+                            ))}
+                          </div>
+                          <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{getRatingLabel(Number(feedbackRecord.rating) || 0)}</span>
+                        </div>
+                        {feedbackRecord.feedback ? (
+                          <p className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">{feedbackRecord.feedback}</p>
+                        ) : (
+                          <p className="text-xs text-slate-600">{pick(lang, "No additional comments provided.", "കൂടുതൽ കുറിപ്പുകൾ നൽകിയിട്ടില്ല.")}</p>
+                        )}
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold uppercase text-slate-700 mb-3">{pick(lang, "How satisfied are you with the resolution?", "How satisfied are you?")}</label>
+                          <div className="flex gap-3 justify-center">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setRating(n)}
+                                className={`group relative rounded-xl px-4 py-3 transition-all transform hover:scale-110 ${
+                                  rating >= n
+                                    ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg"
+                                    : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                                }`}
+                                aria-label={`rate-${n}`}
+                              >
+                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                                <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 whitespace-nowrap">
+                                  {getRatingLabel(n)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-700 mb-2">{pick(lang, "Your Feedback", "കുറിപ്പുകൾ")}</label>
-                      <textarea
-                        value={feedback}
-                        onChange={(e) => {
-                          setFeedback(e.target.value);
-                          setRatingSaved(false);
-                        }}
-                        rows={3}
-                        placeholder={pick(lang, "Share your feedback about the resolution (optional)", "കുറിപ്പ് നൽകുക")}
-                        className="w-full rounded-lg border-2 border-amber-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 resize-none"
-                      />
-                    </div>
+                        <div>
+                          <label className="block text-xs font-bold uppercase text-slate-700 mb-2">{pick(lang, "Your Feedback", "കുറിപ്പുകൾ")}</label>
+                          <textarea
+                            value={feedback}
+                            onChange={(e) => setFeedback(e.target.value.slice(0, 300))}
+                            rows={4}
+                            maxLength={300}
+                            placeholder={pick(lang, "Share your experience (optional)", "അനുഭവം പങ്കിടുക (ഐച്ഛികം)")}
+                            className="w-full rounded-lg border-2 border-amber-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 resize-none"
+                          />
+                          <p className="mt-1 text-right text-xs text-slate-500">{feedback.length}/300</p>
+                        </div>
 
-                    <button
-                      type="button"
-                      onClick={saveRating}
-                      disabled={rating < 1}
-                      className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-700 px-4 py-3 text-sm font-bold text-white hover:shadow-lg hover:scale-105 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {pick(lang, "Save Rating", "Save Rating")}
-                    </button>
+                        {feedbackError && (
+                          <div className="rounded-lg bg-red-50 border-l-4 border-red-500 p-3">
+                            <p className="text-sm text-red-800 font-medium">{feedbackError}</p>
+                          </div>
+                        )}
 
-                    {ratingSaved && (
-                      <div className="rounded-lg bg-emerald-50 border-l-4 border-emerald-500 p-3">
-                        <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        <button
+                          type="button"
+                          onClick={saveRating}
+                          disabled={rating < 1 || feedbackSubmitting}
+                          className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-700 px-4 py-3 text-sm font-bold text-white hover:shadow-lg hover:scale-105 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          {pick(lang, "Thanks! Your rating has been saved.", "Thanks! Rating saved.")}
-                        </p>
-                      </div>
+                          {feedbackSubmitting ? pick(lang, "Submitting...", "സംരക്ഷിക്കുന്നു...") : pick(lang, "Submit Feedback", "ഫീഡ്ബാക്ക് സമർപ്പിക്കുക")}
+                        </button>
+                      </>
                     )}
                   </div>
+                </div>
+              )}
+
+              {canViewOfficialFeedback && (
+                <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Citizen Feedback</h3>
+                    {feedbackRecord && (
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getFeedbackTagTone(Number(feedbackRecord?.rating) || 0)}`}>
+                        {(Number(feedbackRecord?.rating) || 0) >= 4 ? "Good" : (Number(feedbackRecord?.rating) || 0) <= 2 ? "Poor" : "Average"}
+                      </span>
+                    )}
+                  </div>
+
+                  {feedbackLoading ? (
+                    <div className="mt-3 h-20 animate-pulse rounded-xl border border-slate-200 bg-slate-50" />
+                  ) : feedbackError ? (
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      Unable to load feedback: {feedbackError}
+                    </div>
+                  ) : feedbackRecord ? (
+                    <>
+                      <div className="mt-3 flex items-center gap-2 text-slate-800">
+                        <span className="text-amber-500">⭐</span>
+                        <span className="font-semibold">Rating: {Number(feedbackRecord?.rating) || 0}/5</span>
+                      </div>
+                      <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        <span className="mr-1">💬</span>
+                        {feedbackRecord?.feedback || "No written feedback provided."}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      No citizen feedback submitted yet for this complaint.
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -123,14 +123,25 @@ export async function POST(request) {
             },
         });
 
-        const duplicateCandidatesQuery = supabase
+        // Optimize duplicate detection: first filter by location_text to reduce candidates
+        let duplicateCandidatesQuery = supabase
             .from("complaints")
             .select("id, tracking_id, status, support_count, sub_category, latitude, longitude, location_text")
             .eq("local_body_id", parsed.data.local_body_id)
             .eq("category", parsed.data.category)
-            .in("status", ACTIVE_STATUSES)
+            .in("status", ACTIVE_STATUSES);
+
+        // Add location filter if available to reduce database roundtrip
+        if (parsed.data.location_text) {
+            const normalizedLocation = normalizeText(parsed.data.location_text);
+            if (normalizedLocation) {
+                duplicateCandidatesQuery = duplicateCandidatesQuery.eq("location_text", parsed.data.location_text);
+            }
+        }
+
+        duplicateCandidatesQuery = duplicateCandidatesQuery
             .order("created_at", { ascending: false })
-            .limit(100);
+            .limit(20);  // Reduced from 100 to 20 - most duplicates are recent
 
         const { data: duplicateCandidates, error: candidateErr } = await duplicateCandidatesQuery;
         if (candidateErr) throw candidateErr;

@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { pick } from "@/lib/language-utils";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { formatExactDateTime } from "@/lib/date-time";
 
 function Skeleton() {
     return <div className="h-6 w-full animate-pulse rounded bg-slate-200" />;
 }
 
-function fmt(d) { return d ? new Date(d).toLocaleDateString() : "-"; }
+function fmt(d) { return formatExactDateTime(d, "-"); }
 
 export default function SecretaryNotificationsPage() {
     const { profile, loading: authLoading } = useAuth();

@@ -9,6 +9,7 @@ import { pick } from "@/lib/language-utils";
 import { AppShell } from "@/components/dashboard/app-shell";
 import dynamic from "next/dynamic";
 import { formatStaffDisplayLabel } from "@/lib/api/staff-management";
+import { formatExactDateTime, getIndiaDateStamp, toExactTimestamp } from "@/lib/date-time";
 
 const ComplaintMap = dynamic(() => import("@/components/dashboard/complaint-map").then((m) => m.ComplaintMap), { ssr: false });
 
@@ -51,7 +52,7 @@ function StatCard({ label, value, icon, color }) {
     );
 }
 
-function fmt(d) { return d ? new Date(d).toLocaleDateString() : "-"; }
+function fmt(d) { return formatExactDateTime(d, "-"); }
 
 function getPriorityBadge(priority) {
     const p = String(priority || "").toLowerCase();
@@ -239,7 +240,7 @@ export default function SecretaryDashboard() {
                 s.overdue++;
                 continue;
             }
-            if (c.resolution_deadline && new Date(c.resolution_deadline) < new Date() && c.status !== "resolved" && c.status !== "closed") s.overdue++;
+            if (c.resolution_deadline && toExactTimestamp(c.resolution_deadline) < Date.now() && c.status !== "resolved" && c.status !== "closed") s.overdue++;
         }
         return s;
     }, [complaints, totalCount]);
@@ -365,7 +366,7 @@ export default function SecretaryDashboard() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `complaints-${new Date().toISOString().split("T")[0]}.csv`;
+        a.download = `complaints-${getIndiaDateStamp()}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -403,7 +404,7 @@ export default function SecretaryDashboard() {
             if (sortKey === "priority") {
                 return ((rank[a.priority] || 0) - (rank[b.priority] || 0)) * dir;
             }
-            return ((new Date(a.created_at).getTime() || 0) - (new Date(b.created_at).getTime() || 0)) * dir;
+            return ((toExactTimestamp(a.created_at) || 0) - (toExactTimestamp(b.created_at) || 0)) * dir;
         });
     }, [complaints, sortDir, sortKey]);
 
@@ -608,7 +609,7 @@ export default function SecretaryDashboard() {
                                             </tr>
                                         ) : (
                                             displayComplaints.map((c, idx) => {
-                                                const isOverdue = c.status === "overdue" || (c.resolution_deadline && new Date(c.resolution_deadline) < new Date() && c.status !== "resolved" && c.status !== "closed");
+                                                const isOverdue = c.status === "overdue" || (c.resolution_deadline && toExactTimestamp(c.resolution_deadline) < Date.now() && c.status !== "resolved" && c.status !== "closed");
                                                 const priority = getPriorityBadge(c.priority);
                                                 const status = getStatusBadge(c.status, isOverdue);
                                                 const isCopied = copiedId === c.tracking_id;
@@ -701,7 +702,7 @@ export default function SecretaryDashboard() {
                                                                 </div>
                                                             )}
                                                         </td>
-                                                        <td className="px-4 py-4 align-top text-xs text-slate-500">{fmt(c.created_at)}</td>
+                                                        <td className="px-4 py-4 align-top text-xs text-slate-500">{fmt(c.updated_at || c.created_at)}</td>
                                                         <td className="px-4 py-4 align-top text-xs text-slate-500">{fmt(c.resolution_deadline)}</td>
                                                         <td className="px-4 py-4 align-top">
                                                             <div className="flex items-center gap-2">
@@ -737,7 +738,7 @@ export default function SecretaryDashboard() {
                                     <p className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-400">{isComplaintsPage ? "No complaints found" : "No recent complaints found"}</p>
                                 ) : (
                                     displayComplaints.map((c) => {
-                                        const isOverdue = c.status === "overdue" || (c.resolution_deadline && new Date(c.resolution_deadline) < new Date() && c.status !== "resolved" && c.status !== "closed");
+                                        const isOverdue = c.status === "overdue" || (c.resolution_deadline && toExactTimestamp(c.resolution_deadline) < Date.now() && c.status !== "resolved" && c.status !== "closed");
                                         const priority = getPriorityBadge(c.priority);
                                         const status = getStatusBadge(c.status, isOverdue);
                                         const expanded = expandedMobileRows.includes(c.id);
@@ -817,7 +818,7 @@ export default function SecretaryDashboard() {
                                                                 )}
                                                             </div>
                                                         )}
-                                                        <p><span className="font-semibold text-slate-700">Created:</span> {fmt(c.created_at)}</p>
+                                                        <p><span className="font-semibold text-slate-700">Last Activity:</span> {fmt(c.updated_at || c.created_at)}</p>
                                                         <p><span className="font-semibold text-slate-700">Deadline:</span> {fmt(c.resolution_deadline)}</p>
                                                     </div>
                                                 )}

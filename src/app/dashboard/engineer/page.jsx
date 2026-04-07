@@ -8,16 +8,18 @@ import { STATUS_LABELS, PAGE_SIZE, TRANSITIONS } from "@/lib/constants";
 import { pick } from "@/lib/language-utils";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import dynamic from "next/dynamic";
+import { formatExactDateTime, toExactTimestamp } from "@/lib/date-time";
 
 const ComplaintMap = dynamic(() => import("@/components/dashboard/complaint-map").then((m) => m.ComplaintMap), { ssr: false });
 
 function Skeleton() {
     return <div className="h-6 w-full animate-pulse rounded bg-slate-200" />;
 }
-function fmt(d) { return d ? new Date(d).toLocaleDateString() : "-"; }
+function fmt(d) { return formatExactDateTime(d, "-"); }
 function countdown(d) {
     if (!d) return "-";
-    const diff = new Date(d).getTime() - Date.now();
+    const diff = toExactTimestamp(d) - Date.now();
+    if (Number.isNaN(diff)) return "-";
     if (diff <= 0) return "Overdue";
     const h = Math.floor(diff / 3600000);
     return `${Math.floor(h / 24)}d ${h % 24}h`;
@@ -184,9 +186,9 @@ export default function StaffDashboard() {
                 return ((rank[a.priority] || 0) - (rank[b.priority] || 0)) * dir;
             }
             if (sortKey === "deadline") {
-                return ((new Date(a.resolution_deadline).getTime() || 0) - (new Date(b.resolution_deadline).getTime() || 0)) * dir;
+                return ((toExactTimestamp(a.resolution_deadline) || 0) - (toExactTimestamp(b.resolution_deadline) || 0)) * dir;
             }
-            return ((new Date(a.created_at).getTime() || 0) - (new Date(b.created_at).getTime() || 0)) * dir;
+            return ((toExactTimestamp(a.created_at) || 0) - (toExactTimestamp(b.created_at) || 0)) * dir;
         });
     }, [complaints, sortDir, sortKey]);
 

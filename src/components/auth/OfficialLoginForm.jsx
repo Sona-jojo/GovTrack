@@ -8,6 +8,7 @@ import { useAuth } from "./auth-provider";
 const LOCAL_BODY_TYPE_LABELS = {
     grama_panchayat: "Grama Panchayat",
     block_panchayat: "Block Panchayat",
+    district_panchayat: "District Panchayath",
     municipality: "Municipality",
     corporation: "Corporation",
 };
@@ -234,11 +235,19 @@ function OfficialFormInner() {
         setLoadingBodies(true);
         const supabase = getSupabaseClient();
         if (!supabase) { setLoadingBodies(false); return; }
-        supabase
+        let query = supabase
             .from("local_bodies")
             .select("id, name")
-            .eq("type", selectedType)
-            .order("name")
+            .order("name");
+
+        if (selectedType === "district_panchayat") {
+            // Keep login resilient if legacy rows use the alternate spelling.
+            query = query.in("type", ["district_panchayat", "district_panchayath"]);
+        } else {
+            query = query.eq("type", selectedType);
+        }
+
+        query
             .then(({ data, error: err }) => {
                 if (!err) setLocalBodies(data || []);
                 setLoadingBodies(false);

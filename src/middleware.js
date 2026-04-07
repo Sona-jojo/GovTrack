@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
     "/api/admin",
     "/api/profile",
     "/api/settings/get",
+    "/api/feedback",
 ];
 
 function isPublic(pathname) {

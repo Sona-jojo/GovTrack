@@ -3,8 +3,8 @@ import { apiSuccess, apiError, handleApiError } from "@/lib/error-handler";
 import { z } from "zod";
 
 const findComplaintSchema = z.object({
-    phone: z.string().trim().optional(),
-    email: z.string().trim().email().optional(),
+    phone: z.string().trim().regex(/^\d{10}$/, "Phone number must be exactly 10 digits").optional(),
+    email: z.string().trim().regex(/^[^\s@]+@gmail\.com$/i, "Email must be a valid @gmail.com address").optional(),
 });
 
 // POST — Find complaints by citizen contact info (public, no auth)

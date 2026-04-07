@@ -20,6 +20,7 @@ import {
 import jsPDF from "jspdf";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { formatExactDate, formatExactDateTime, getIndiaDateStamp } from "@/lib/date-time";
 
 const PIE_COLORS = ["#10b981", "#f59e0b", "#ef4444"];
 
@@ -56,10 +57,7 @@ function TableSkeleton() {
 }
 
 function formatDateLabel(value) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString();
+  return formatExactDate(value, "-");
 }
 
 function roleBadge(role) {
@@ -157,7 +155,7 @@ export default function SecretaryPerformanceReportPage() {
     doc.setFontSize(16);
     doc.text("Staff Performance Report", 14, 18);
     doc.setFontSize(11);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+    doc.text(`Generated: ${formatExactDateTime(new Date())}`, 14, 26);
 
     doc.text(`Total: ${summary.totalComplaints}`, 14, 36);
     doc.text(`Resolved: ${summary.resolved}`, 14, 43);
@@ -181,7 +179,7 @@ export default function SecretaryPerformanceReportPage() {
       }
     }
 
-    doc.save(`staff-performance-${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`staff-performance-${getIndiaDateStamp()}.pdf`);
   };
 
   if (authLoading) {

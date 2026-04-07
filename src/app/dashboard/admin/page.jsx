@@ -64,6 +64,11 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [reminders, setReminders] = useState([]);
     const [remindersGeneratedAt, setRemindersGeneratedAt] = useState(null);
+    const [feedbackSummary, setFeedbackSummary] = useState({
+        totalFeedbacks: 0,
+        averageRating: 0,
+        lowRatingCount: 0,
+    });
 
     // Role guard — redirect if not admin
     useEffect(() => {
@@ -93,6 +98,24 @@ export default function AdminDashboard() {
     useEffect(() => {
         if (profile?.role === "admin") fetchAllComplaints();
     }, [fetchAllComplaints, profile]);
+
+    const fetchFeedbackSummary = useCallback(async () => {
+        try {
+            const res = await fetch("/api/analytics/summary", { cache: "no-store" });
+            const json = await res.json();
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.message || "Failed to load feedback analytics");
+            }
+            setFeedbackSummary(json.data?.feedbackSummary || { totalFeedbacks: 0, averageRating: 0, lowRatingCount: 0 });
+        } catch {
+            setFeedbackSummary({ totalFeedbacks: 0, averageRating: 0, lowRatingCount: 0 });
+        }
+    }, []);
+
+    useEffect(() => {
+        if (profile?.role !== "admin") return;
+        fetchFeedbackSummary();
+    }, [fetchFeedbackSummary, profile?.role]);
 
     const fetchReminders = useCallback(async () => {
         try {
@@ -198,13 +221,27 @@ export default function AdminDashboard() {
                 )}
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
                     <StatCard label="Total Complaints" value={stats.total} icon="📊" color="border-blue-200 bg-blue-50" />
                     <StatCard label="Pending" value={stats.pending} icon="📝" color="border-yellow-200 bg-yellow-50" />
                     <StatCard label="In Progress" value={stats.in_progress} icon="⚙️" color="border-orange-200 bg-orange-50" />
                     <StatCard label="Resolved" value={stats.resolved} icon="✅" color="border-emerald-200 bg-emerald-50" />
                     <StatCard label="Overdue" value={stats.overdue} icon="🔴" color="border-red-200 bg-red-50 ui-badge-pulse" />
+                    <StatCard
+                        label="Average Rating"
+                        value={feedbackSummary.totalFeedbacks > 0 ? `${feedbackSummary.averageRating}/5` : "-"}
+                        icon="⭐"
+                        color="border-amber-200 bg-amber-50"
+                    />
                 </div>
+
+                {feedbackSummary.lowRatingCount > 0 && (
+                    <div className="rounded-2xl border border-rose-300 bg-gradient-to-r from-rose-50 to-orange-50 p-4">
+                        <p className="text-sm font-bold text-rose-900">
+                            ⚠ {feedbackSummary.lowRatingCount} complaints rated below 2⭐
+                        </p>
+                    </div>
+                )}
 
                 {/* Alerts Section */}
                 {overdueComplaints.length > 0 && (

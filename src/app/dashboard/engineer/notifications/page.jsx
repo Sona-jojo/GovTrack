@@ -6,16 +6,18 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { pick } from "@/lib/language-utils";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
+import { formatExactDateTime, toExactTimestamp } from "@/lib/date-time";
 
 function Skeleton() {
     return <div className="h-6 w-full animate-pulse rounded bg-slate-200" />;
 }
 
-function fmt(d) { return d ? new Date(d).toLocaleDateString() : "-"; }
+function fmt(d) { return formatExactDateTime(d, "-"); }
 
 function countdown(d) {
     if (!d) return "-";
-    const diff = new Date(d).getTime() - Date.now();
+    const diff = toExactTimestamp(d) - Date.now();
+    if (Number.isNaN(diff)) return "-";
     if (diff <= 0) return "Overdue";
     const h = Math.floor(diff / 3600000);
     return `${Math.floor(h / 24)}d ${h % 24}h`;
@@ -57,18 +59,22 @@ export default function StaffNotificationsPage() {
     }, [user, role]);
 
     useEffect(() => {
-        fetchNotifications();
-    }, [fetchNotifications]);
-
-    useEffect(() => {
-        const intervalId = setInterval(fetchNotifications, 60000);
-        return () => clearInterval(intervalId);
+        const timeoutId = setTimeout(() => {
+            void fetchNotifications();
+        }, 0);
+        const intervalId = setInterval(() => {
+            void fetchNotifications();
+        }, 60000);
+        return () => {
+            clearTimeout(timeoutId);
+            clearInterval(intervalId);
+        };
     }, [fetchNotifications]);
 
     const roleLabel = role === "engineer" ? "Engineer" : "Clerk";
 
     const sortedNotifications = useMemo(() => {
-        return [...notifications].sort((a, b) => (new Date(b.updated_at).getTime() || 0) - (new Date(a.updated_at).getTime() || 0));
+        return [...notifications].sort((a, b) => (toExactTimestamp(b.updated_at) || 0) - (toExactTimestamp(a.updated_at) || 0));
     }, [notifications]);
 
     if (authLoading) {

@@ -37,7 +37,6 @@ export default function NoticesDisplayPage() {
   useEffect(() => {
     if (!localBodyId) return;
     let mounted = true;
-    setLoading(true);
 
     const localBodyParams = new URLSearchParams({ localBodyId: String(localBodyId), limit: "100" });
 

@@ -2,6 +2,22 @@ import { createServerClient } from "@supabase/ssr";
 import { apiSuccess, apiError, handleApiError } from "@/lib/error-handler";
 import { runDeadlineEscalation } from "@/lib/deadline-escalation";
 
+function toUtcIso(value) {
+    if (!value) return value;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        const normalized = trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T");
+        const withZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`;
+        const retry = new Date(withZone);
+        if (!Number.isNaN(retry.getTime())) return retry.toISOString();
+    }
+
+    return value;
+}
+
 // GET — Fetch complaint by tracking ID (public, no auth)
 export async function GET(_request, { params }) {
     try {
@@ -80,8 +96,35 @@ export async function GET(_request, { params }) {
             image_url: signedByPath.get(img.storage_path) || img.image_url,
         }));
 
-        return apiSuccess({
+        const { data: latestSupportReport } = await supabase
+            .from("complaint_support_reports")
+            .select("created_at")
+            .eq("complaint_id", data.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        const normalizedStatusLogs = Array.isArray(data.status_logs)
+            ? data.status_logs.map((log) => ({
+                ...log,
+                changed_at: toUtcIso(log?.changed_at),
+                created_at: toUtcIso(log?.created_at),
+            }))
+            : data.status_logs;
+
+        const normalizedData = {
             ...data,
+            created_at: toUtcIso(data.created_at),
+            updated_at: toUtcIso(data.updated_at),
+            resolved_at: toUtcIso(data.resolved_at),
+            resolution_deadline: toUtcIso(data.resolution_deadline),
+            last_escalated_at: toUtcIso(data.last_escalated_at),
+            latest_reported_at: toUtcIso(latestSupportReport?.created_at) || toUtcIso(data.created_at),
+            status_logs: normalizedStatusLogs,
+        };
+
+        return apiSuccess({
+            ...normalizedData,
             complaint_images: normalizedImages,
         });
     } catch (err) {

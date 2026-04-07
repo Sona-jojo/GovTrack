@@ -8,6 +8,7 @@ import { pick } from "@/lib/language-utils";
 import { BackArrowButton } from "@/components/ui/back-arrow-button";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants";
+import { formatExactDateTime } from "@/lib/date-time";
 
 // Icon components for better visual appeal
 const SearchIcon = () => (
@@ -35,16 +36,23 @@ const AlertIcon = () => (
 );
 
 function fmt(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = date.getFullYear();
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  const hour12 = hours % 12 || 12;
-  return `${day}-${month}-${year}, ${hour12}:${minutes} ${ampm}`;
+  return formatExactDateTime(value, "-");
+}
+
+function isValidPhoneNumber(value) {
+  return /^\d{10}$/.test(String(value || "").trim());
+}
+
+function isValidGmailAddress(value) {
+  return /^[^\s@]+@gmail\.com$/i.test(String(value || "").trim());
+}
+
+function getRatingLabel(rating) {
+  if (rating <= 1) return "Poor";
+  if (rating === 2) return "Fair";
+  if (rating === 3) return "Good";
+  if (rating === 4) return "Very Good";
+  return "Excellent";
 }
 
 function normalizeCitizenStatus(status) {
@@ -103,6 +111,12 @@ export function TrackingView({ lang = "en" }) {
   const [lookupError, setLookupError] = useState("");
   const [lookupResults, setLookupResults] = useState([]);
   const [lookupSearched, setLookupSearched] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackRecord, setFeedbackRecord] = useState(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
 
   useEffect(() => {
     const prefillId = searchParams.get("tracking_id") || "";
@@ -112,12 +126,13 @@ export function TrackingView({ lang = "en" }) {
   }, [searchParams]);
 
   const citizenStatus = normalizeCitizenStatus(record?.status);
+  const reportedAt = record?.latest_reported_at || record?.created_at;
   const timelineSteps = useMemo(
     () => [
       {
         id: "reported",
         label: pick(lang, "Reported", "Reported"),
-        done: Boolean(record?.created_at),
+        done: Boolean(reportedAt),
       },
       {
         id: "assigned",
@@ -135,7 +150,7 @@ export function TrackingView({ lang = "en" }) {
         done: ["resolved", "closed"].includes(record?.status),
       },
     ],
-    [lang, record?.created_at, record?.status]
+    [lang, reportedAt, record?.status]
   );
 
   const resolutionImages = useMemo(() => {
@@ -186,6 +201,28 @@ export function TrackingView({ lang = "en" }) {
       return;
     }
 
+    if (phone && !isValidPhoneNumber(phone)) {
+      setLookupError(
+        pick(
+          lang,
+          "Phone number must be exactly 10 digits.",
+          "ഫോൺ നമ്പർ 10 അക്കങ്ങൾ ആയിരിക്കണം."
+        )
+      );
+      return;
+    }
+
+    if (email && !isValidGmailAddress(email)) {
+      setLookupError(
+        pick(
+          lang,
+          "Email must be a valid @gmail.com address.",
+          "ഇമെയിൽ വിലാസം @gmail.com ആയിരിക്കണം."
+        )
+      );
+      return;
+    }
+
     setLookupLoading(true);
     try {
       const res = await fetch("/api/complaints/find", {
@@ -202,6 +239,75 @@ export function TrackingView({ lang = "en" }) {
       setLookupError(err.message || pick(lang, "Unable to find complaints right now.", "Unable to find complaints right now."));
     } finally {
       setLookupLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!record?.id || !(record.status === "resolved" || record.status === "closed")) {
+      setFeedbackRecord(null);
+      setRating(0);
+      setFeedbackText("");
+      setFeedbackError("");
+      return;
+    }
+
+    let alive = true;
+    const loadFeedback = async () => {
+      setFeedbackLoading(true);
+      try {
+        const res = await fetch(`/api/feedback/get/${encodeURIComponent(record.id)}`, { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.message || "Failed to load feedback");
+        }
+
+        if (!alive) return;
+        const existing = json.data || null;
+        setFeedbackRecord(existing);
+        if (existing) {
+          setRating(Number(existing.rating) || 0);
+          setFeedbackText(existing.feedback || "");
+        }
+      } catch (err) {
+        if (!alive) return;
+        setFeedbackError(err?.message || "Failed to load feedback");
+      } finally {
+        if (alive) setFeedbackLoading(false);
+      }
+    };
+
+    loadFeedback();
+    return () => {
+      alive = false;
+    };
+  }, [record?.id, record?.status]);
+
+  const submitFeedback = async () => {
+    if (!record?.id || rating < 1 || feedbackSubmitting || feedbackRecord) return;
+
+    setFeedbackSubmitting(true);
+    setFeedbackError("");
+    try {
+      const res = await fetch("/api/feedback/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          complaintId: record.id,
+          rating,
+          feedback: feedbackText.trim() || null,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || "Unable to submit feedback");
+      }
+
+      setFeedbackRecord(json.data || null);
+    } catch (err) {
+      setFeedbackError(err?.message || "Unable to submit feedback");
+    } finally {
+      setFeedbackSubmitting(false);
     }
   };
 
@@ -293,8 +399,11 @@ export function TrackingView({ lang = "en" }) {
                   <input
                     type="tel"
                     value={lookupPhone}
-                    onChange={(e) => setLookupPhone(e.target.value)}
+                    onChange={(e) => setLookupPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     placeholder={pick(lang, "Phone Number", "Phone Number")}
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
                     className="rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                   />
                   <input
@@ -302,6 +411,7 @@ export function TrackingView({ lang = "en" }) {
                     value={lookupEmail}
                     onChange={(e) => setLookupEmail(e.target.value)}
                     placeholder={pick(lang, "Email Address", "Email Address")}
+                    pattern="^[^\\s@]+@gmail\\.com$"
                     className="rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
                   />
                 </div>
@@ -458,7 +568,7 @@ export function TrackingView({ lang = "en" }) {
                 <svg className="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" />
                 </svg>
-                {pick(lang, "Reported", "Reported")}: {fmt(record.created_at)}
+                {pick(lang, "Reported", "Reported")}: {fmt(reportedAt)}
               </p>
             </div>
 
@@ -489,6 +599,85 @@ export function TrackingView({ lang = "en" }) {
                     </a>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {(record.status === "resolved" || record.status === "closed") && (
+              <div className="overflow-hidden rounded-2xl border border-white/50 bg-gradient-to-br from-white/80 via-amber-50/70 to-orange-50/70 p-6 shadow-lg backdrop-blur sm:p-8">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⭐</span>
+                  <h3 className="text-lg font-bold text-gray-900">{pick(lang, "Rate This Resolution", "Rate This Resolution")}</h3>
+                </div>
+
+                {feedbackLoading ? (
+                  <div className="mt-4 h-24 animate-pulse rounded-xl border border-amber-200 bg-white/70" />
+                ) : feedbackRecord ? (
+                  <div className="mt-4 space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                    <p className="text-sm font-semibold text-emerald-900">{pick(lang, "Thank you for your feedback!", "Thank you for your feedback!")}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <span key={`track-saved-star-${n}`} className={feedbackRecord.rating >= n ? "text-amber-500" : "text-slate-300"}>⭐</span>
+                        ))}
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{getRatingLabel(Number(feedbackRecord.rating) || 0)}</span>
+                    </div>
+                    {feedbackRecord.feedback ? (
+                      <p className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">💬 {feedbackRecord.feedback}</p>
+                    ) : (
+                      <p className="text-xs text-slate-600">{pick(lang, "No additional comments provided.", "No additional comments provided.")}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{pick(lang, "How satisfied are you?", "How satisfied are you?")}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={`track-star-${n}`}
+                            type="button"
+                            onClick={() => setRating(n)}
+                            className={`group rounded-xl px-3 py-2 transition hover:-translate-y-0.5 ${
+                              rating >= n
+                                ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow"
+                                : "bg-white text-slate-400 border border-slate-200"
+                            }`}
+                          >
+                            <span>⭐</span>
+                            <span className="ml-1 text-xs font-semibold">{n}</span>
+                            <span className="pointer-events-none absolute opacity-0" aria-hidden="true">{getRatingLabel(n)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">💬 {pick(lang, "Share your experience (optional)", "Share your experience (optional)")}</label>
+                      <textarea
+                        value={feedbackText}
+                        onChange={(e) => setFeedbackText(e.target.value.slice(0, 300))}
+                        rows={4}
+                        maxLength={300}
+                        className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                      />
+                      <p className="mt-1 text-right text-xs text-slate-500">{feedbackText.length}/300</p>
+                    </div>
+
+                    {feedbackError && (
+                      <div className="rounded-lg border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-700">{feedbackError}</div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={submitFeedback}
+                      disabled={rating < 1 || feedbackSubmitting}
+                      className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 px-4 py-3 text-sm font-semibold text-white shadow transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {feedbackSubmitting ? pick(lang, "Submitting...", "Submitting...") : pick(lang, "Submit Feedback", "Submit Feedback")}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

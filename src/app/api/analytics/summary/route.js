@@ -29,6 +29,34 @@ export async function GET(request) {
     const total = complaints.length;
     const pending = Math.max(total - resolved, 0);
 
+    const complaintIds = complaints.map((item) => item.id).filter(Boolean);
+    let feedbackSummary = {
+      totalFeedbacks: 0,
+      averageRating: 0,
+      lowRatingCount: 0,
+    };
+
+    if (complaintIds.length > 0) {
+      // Use SQL aggregation instead of loading all rows and filtering in JavaScript
+      const { data: feedbackAgg, error: feedbackError } = await supabase
+        .rpc("get_feedback_summary", {
+          complaint_ids: complaintIds,
+        });
+
+      if (feedbackError && feedbackError.code !== "42P01" && feedbackError.code !== "PGRST205") {
+        throw feedbackError;
+      }
+
+      if (feedbackAgg && feedbackAgg.length > 0) {
+        const summary = feedbackAgg[0];
+        feedbackSummary = {
+          totalFeedbacks: summary.total_feedbacks || 0,
+          averageRating: summary.avg_rating ? Number(summary.avg_rating.toFixed(1)) : 0,
+          lowRatingCount: summary.low_rating_count || 0,
+        };
+      }
+    }
+
     return apiSuccess({
       filters,
       totals: {
@@ -43,6 +71,7 @@ export async function GET(request) {
         { name: "resolved", value: resolved },
         { name: "pending", value: pending },
       ],
+      feedbackSummary,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {

@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { formatExactDateTime, getIndiaDateStamp, getIndiaMonthStamp } from "@/lib/date-time";
 
 const CHART_COLORS = ["#2563eb", "#0d9488", "#7c3aed", "#f59e0b", "#ef4444", "#14b8a6", "#334155"];
 
@@ -96,7 +97,7 @@ export default function AdminAnalyticsPage() {
   const [localBodies, setLocalBodies] = useState([]);
   const [filters, setFilters] = useState({
     dateRange: "all_time",
-    selectedMonth: new Date().toISOString().slice(0, 7),
+    selectedMonth: getIndiaMonthStamp(),
     startDate: "",
     endDate: "",
     localBodyId: "",
@@ -104,7 +105,7 @@ export default function AdminAnalyticsPage() {
   });
   const [appliedFilters, setAppliedFilters] = useState({
     dateRange: "all_time",
-    selectedMonth: new Date().toISOString().slice(0, 7),
+    selectedMonth: getIndiaMonthStamp(),
     startDate: "",
     endDate: "",
     localBodyId: "",
@@ -262,20 +263,20 @@ export default function AdminAnalyticsPage() {
 
   const exportCsv = () => {
     const csv = toCsv(sortedDepartmentRows);
-    const date = new Date().toISOString().slice(0, 10);
+    const date = getIndiaDateStamp();
     downloadBlob(`analytics-report-${date}.csv`, csv, "text/csv;charset=utf-8;");
     logSystemEvent("data_export_completed", "CSV export");
   };
 
   const exportPdf = () => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = getIndiaDateStamp();
     const doc = new jsPDF({ unit: "pt", format: "a4" });
 
     doc.setFontSize(18);
     doc.text("Reporting & Analytics", 40, 46);
 
     doc.setFontSize(11);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 66);
+    doc.text(`Generated: ${formatExactDateTime(new Date())}`, 40, 66);
 
     const totals = summary?.totals;
     const lines = [
@@ -317,13 +318,13 @@ export default function AdminAnalyticsPage() {
 
   const downloadMonthlyPdf = () => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const date = new Date().toISOString().slice(0, 10);
+    const date = getIndiaDateStamp();
 
     doc.setFontSize(20);
     doc.text("Monthly Transparency Report", 40, 50);
     doc.setFontSize(11);
     doc.text(`Period: ${monthlyReport?.month || "Current Month"}`, 40, 70);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 88);
+    doc.text(`Generated: ${formatExactDateTime(new Date())}`, 40, 88);
 
     doc.setFontSize(12);
     doc.text(`Total complaints this month: ${monthlyReport?.totalComplaints ?? 0}`, 40, 120);
