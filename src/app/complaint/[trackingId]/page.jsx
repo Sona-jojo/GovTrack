@@ -166,6 +166,26 @@ export default function ComplaintDetailsPage() {
     (profile?.role === "admin" || profile?.role === "secretary" || isAssigneeForComplaint);
   const reportedAt = record?.latest_reported_at || record?.created_at;
 
+  const complaintImages = useMemo(
+    () => (Array.isArray(record?.complaint_images) ? record.complaint_images : []),
+    [record?.complaint_images]
+  );
+
+  const citizenIssueImages = useMemo(
+    () => complaintImages.filter((img) => (img?.image_type || "issue") === "issue"),
+    [complaintImages]
+  );
+
+  const officialProofImages = useMemo(
+    () => complaintImages.filter((img) => img?.image_type === "proof"),
+    [complaintImages]
+  );
+
+  const otherImages = useMemo(
+    () => complaintImages.filter((img) => !["issue", "proof"].includes(img?.image_type || "issue")),
+    [complaintImages]
+  );
+
   const nextStatusOptions = useMemo(() => {
     // Show all statuses instead of filtered transitions
     return STATUSES.filter((s) => s !== record?.status);
@@ -870,44 +890,113 @@ export default function ComplaintDetailsPage() {
                 </div>
               )}
 
-              {record.complaint_images?.length > 0 && (
+              {complaintImages.length > 0 && (
                 <div className="rounded-2xl bg-gradient-to-br from-white/80 to-pink-50/60 backdrop-blur-xl border border-white/50 shadow-lg overflow-hidden">
                   <div className="bg-gradient-to-r from-pink-500 to-rose-600 px-6 py-4 sm:px-8">
                     <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
                       <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
                       </svg>
-                      {pick(lang, "Attached Images", "ഘടിപ്പിച്ച ചിത്രങ്ങൾ")}
+                      {pick(lang, "Image Evidence", "ചിത്ര തെളിവുകൾ")}
                     </h2>
                   </div>
                   
-                  <div className="p-6 sm:p-8">
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                      {record.complaint_images.map((img) => (
-                        <a
-                          key={img.id}
-                          href={img.image_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group relative overflow-hidden rounded-xl border-2 border-pink-200 shadow-md hover:shadow-xl transition-all"
-                        >
-                          <img
-                            src={img.image_url}
-                            alt={img.image_type}
-                            className="h-32 w-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
-                            <span className="text-white text-xs font-semibold text-center px-2">{img.image_type}</span>
-                          </div>
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
+                  <div className="space-y-6 p-6 sm:p-8">
+                    {citizenIssueImages.length > 0 && (
+                      <div>
+                        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">
+                          {pick(lang, "Citizen Uploaded Images", "പൗരൻ അപ്ലോഡ് ചെയ്ത ചിത്രങ്ങൾ")}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                          {citizenIssueImages.map((img) => (
+                            <a
+                              key={img.id}
+                              href={img.image_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group relative overflow-hidden rounded-xl border-2 border-pink-200 shadow-md hover:shadow-xl transition-all"
+                            >
+                              <img
+                                src={img.image_url}
+                                alt="Citizen issue image"
+                                className="h-40 w-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-pink-700">
+                                {pick(lang, "Citizen", "പൗരൻ")}
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {officialProofImages.length > 0 && (
+                      <div>
+                        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">
+                          {pick(lang, "Official Resolution Images", "ഓഫീഷ്യൽ പരിഹാര ചിത്രങ്ങൾ")}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                          {officialProofImages.map((img) => (
+                            <a
+                              key={img.id}
+                              href={img.image_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group relative overflow-hidden rounded-xl border-2 border-emerald-200 shadow-md hover:shadow-xl transition-all"
+                            >
+                              <img
+                                src={img.image_url}
+                                alt="Official proof image"
+                                className="h-40 w-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                                {pick(lang, "Official", "അധികാരി")}
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {otherImages.length > 0 && (
+                      <div>
+                        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">
+                          {pick(lang, "Other Uploaded Images", "മറ്റ് അപ്ലോഡ് ചെയ്ത ചിത്രങ്ങൾ")}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                          {otherImages.map((img) => (
+                            <a
+                              key={img.id}
+                              href={img.image_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group relative overflow-hidden rounded-xl border-2 border-slate-200 shadow-md hover:shadow-xl transition-all"
+                            >
+                              <img
+                                src={img.image_url}
+                                alt={img.image_type || "Uploaded image"}
+                                className="h-40 w-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {citizenIssueImages.length === 0 && officialProofImages.length === 0 && otherImages.length === 0 && (
+                      <p className="text-sm text-slate-600">{pick(lang, "No images available.", "ചിത്രങ്ങൾ ലഭ്യമല്ല.")}</p>
+                    )}
                   </div>
+                </div>
+              )}
+
+              {officialProofImages.length === 0 && isResolved && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {pick(
+                    lang,
+                    "Resolution is marked complete, but no official proof images were uploaded yet.",
+                    "പരിഹാരം പൂർത്തിയായി എന്ന് അടയാളപ്പെടുത്തിയിട്ടുണ്ട്, പക്ഷേ ഔദ്യോഗിക തെളിവ് ചിത്രങ്ങൾ ഇതുവരെ അപ്ലോഡ് ചെയ്തിട്ടില്ല."
+                  )}
                 </div>
               )}
             </div>
