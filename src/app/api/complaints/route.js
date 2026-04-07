@@ -28,6 +28,7 @@ const complaintSchema = z.object({
     local_body_id: z.string().uuid(),
     category: z.string().min(1),
     sub_category: nullableText,
+    ward: nullableText,
     description: z.string().min(5),
     priority: z.enum(["low", "high", "urgent"]).default("low"),
     reporter_name: nullableText,
@@ -99,6 +100,18 @@ function isSubCategoryMatch(existing, incoming) {
     return incomingSubCategory === existingSubCategory;
 }
 
+function isWardMatch(existing, incoming) {
+    const incomingWard = normalizeText(incoming.ward);
+    const existingWard = normalizeText(existing.ward);
+
+    // Keep existing behavior when user does not provide ward.
+    if (!incomingWard) return true;
+
+    // If ward is provided, only auto-link duplicates within same ward.
+    if (!existingWard) return false;
+    return existingWard === incomingWard;
+}
+
 // POST — Create complaint (public, no auth required)
 export async function POST(request) {
     try {
@@ -126,7 +139,7 @@ export async function POST(request) {
         // Optimize duplicate detection: first filter by location_text to reduce candidates
         let duplicateCandidatesQuery = supabase
             .from("complaints")
-            .select("id, tracking_id, status, support_count, sub_category, latitude, longitude, location_text")
+            .select("id, tracking_id, status, support_count, sub_category, ward, latitude, longitude, location_text")
             .eq("local_body_id", parsed.data.local_body_id)
             .eq("category", parsed.data.category)
             .in("status", ACTIVE_STATUSES);
@@ -147,7 +160,9 @@ export async function POST(request) {
         if (candidateErr) throw candidateErr;
 
         const duplicateComplaint = (duplicateCandidates || []).find((candidate) => {
-            return isSubCategoryMatch(candidate, parsed.data) && isLocationMatch(candidate, parsed.data);
+            return isSubCategoryMatch(candidate, parsed.data)
+                && isWardMatch(candidate, parsed.data)
+                && isLocationMatch(candidate, parsed.data);
         });
 
         if (duplicateComplaint) {

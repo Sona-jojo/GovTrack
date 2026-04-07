@@ -906,6 +906,7 @@ export function MultiStepForm({ lang = "en", initialCategory = "" }) {
           local_body_id: formData.localBody.id,
           category: getRuntimeCategoryLabel(formData.category, "en"),
           sub_category: selectedSubcategoryLabel || null,
+          ward: formData.ward?.trim() || null,
           description: formData.description,
           priority: formData.priority,
           reporter_name: formData.isAnonymous ? null : formData.reporterName || null,
@@ -1609,6 +1610,38 @@ export function MultiStepForm({ lang = "en", initialCategory = "" }) {
                 </div>
               )}
 
+              {/* Ward Selection */}
+              {formData.localBody && (
+                <div className="animate-fadeIn">
+                  <label className="block text-sm font-semibold text-slate-900 mb-3">
+                    {pick(lang, "Ward", "വാർഡ്")}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.ward || ""}
+                    onChange={(e) => handleWardChange(e.target.value)}
+                    placeholder={pick(lang, "Enter ward manually", "വാർഡ് കൈയ്യോടെ നൽകുക")}
+                    className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+
+                  {suggestedWard && !formData.ward && (
+                    <p className="mt-2 text-xs text-sky-700">
+                      {pick(lang, "Suggested ward", "നിർദ്ദേശിച്ച വാർഡ്")}: {suggestedWard}
+                    </p>
+                  )}
+
+                  {wardMismatch && (
+                    <p className="mt-2 text-xs text-amber-700">
+                      {pick(
+                        lang,
+                        "Selected ward differs from location suggestion. Please verify before submitting.",
+                        "തിരഞ്ഞെടുത്ത വാർഡ് ലൊക്കേഷൻ നിർദ്ദേശത്തിൽ നിന്നും വ്യത്യസ്തമാണ്. സമർപ്പിക്കുന്നതിന് മുമ്പ് പരിശോധിക്കുക."
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
+
                 </div>
               </div>
 
@@ -1804,6 +1837,14 @@ export function MultiStepForm({ lang = "en", initialCategory = "" }) {
                       {formData.localBody?.name}
                     </p>
                   </div>
+                  {formData.ward && (
+                    <div className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-cyan-700 mb-1">
+                        {pick(lang, "Ward", "വാർഡ്")}
+                      </p>
+                      <p className="text-sm font-bold text-slate-900">{formData.ward}</p>
+                    </div>
+                  )}
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-xs uppercase tracking-wide font-semibold text-slate-700 mb-2">
                       📌 {pick(lang, "Exact Location", "കൃത്യമായ സ്ഥാനം")}
